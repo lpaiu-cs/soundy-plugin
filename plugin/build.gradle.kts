@@ -15,6 +15,11 @@ base {
     archivesName.set("soundy-plugin")
 }
 
+// Lavalink reads the generated lavalink-plugins/soundy.properties; version and path come from the project.
+lavalinkPlugin {
+    name.set("soundy")
+}
+
 dependencies {
     implementation(project(":source"))
     implementation(project(":common"))
