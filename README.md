@@ -6,121 +6,79 @@ SoundCloud dropped their old progressive MP3 streams and switched entirely to fr
 Originally created by [waris4ly](https://github.com/waris4ly).
 
 ## Table of Contents
-- [Common](#common)
-  - Information about the `common` module and usage.
-- [Source](#source)
-  - Information about the `source` module and usage.
-- [Plugin](#plugin)
-  - Information about the `plugin` module and usage.
+- [Installation](#installation)
+  - Installing the plugin in Lavalink v4.
 - [Configuration](#configuration)
-  - Information on configuring the plugin in Lavalink.
+  - Required settings in `application.yml`.
 - [Usage](#usage)
   - Supported URL formats and search syntax.
+- [Library use](#library-use)
+  - Using the `common` and `source` modules with Lavaplayer directly.
 - [Building](#building)
   - Instructions for building from source.
 - [Support](#support)
   - Where to get help or report issues.
 
-## common
-This module provides the core HTTP client, metadata parsers, and dynamic client ID retrieval.
-
-<details>
-<summary>Using in Gradle:</summary>
-
-```kotlin
-repositories {
-  maven("https://maven.lavalink.dev/releases")
-}
-
-dependencies {
-  // Replace VERSION with the current version from the Releases tab
-  implementation("com.waris4ly.soundy:common:VERSION")
-}
-```
-
-</details>
-
-## source
-This module provides the source manager for use with Lavaplayer.
-
-<details>
-<summary>Using in Gradle:</summary>
-
-```kotlin
-repositories {
-  maven("https://maven.lavalink.dev/releases")
-}
-
-dependencies {
-  // Replace VERSION with the current version from the Releases tab
-  implementation("com.waris4ly.soundy:source:VERSION")
-}
-```
-
-</details>
-
-Example usage:
-
-```java
-AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
-playerManager.registerSourceManager(new SoundySourceManager());
-```
-
-## plugin
-This module serves as the plugin for use with [Lavalink](https://github.com/lavalink-devs/Lavalink).
-
-To use this plugin with Lavalink, declare the dependency in your `application.yml`:
-
-<details>
-<summary>Using with Lavalink v4:</summary>
-
-```yaml
-lavalink:
-  plugins:
-    # Replace VERSION with the current version from the Releases tab
-    - dependency: "com.waris4ly.soundy:plugin:VERSION"
-      repository: "https://maven.lavalink.dev/releases"
-```
-
-</details>
-
-Alternatively, download the `soundy-plugin-x.x.x.jar` from the [Releases](https://github.com/lpaiu-cs/soundy-plugin/releases) page and place it into your `plugins` directory:
+## Installation
+Download `soundy-plugin-<version>.jar` from the [Releases](https://github.com/lpaiu-cs/soundy-plugin/releases) page, put it in Lavalink's `plugins` directory, and restart Lavalink:
 
 ```
 lavalink/
 ├── Lavalink.jar
 ├── application.yml
 └── plugins/
-    └── soundy-plugin-x.x.x.jar
+    └── soundy-plugin-<version>.jar
 ```
+
+Keep only one Soundy jar in `plugins`: delete the old one when you upgrade.
+
+Do not list Soundy under `lavalink.plugins`. That list makes Lavalink download plugins from a Maven repository, and Soundy is not published to one that Lavalink can download from.
 
 ## Configuration
-To configure the plugin, add the `soundy` block to your `application.yml`:
+Add both settings to `application.yml`:
 
 ```yaml
-plugins:
+lavalink:
+  server:
+    sources:
+      soundcloud: false # required: turns off Lavalink's built-in SoundCloud source
+
+plugins: # top-level key, not under lavalink
   soundy:
-    enabled: true # Set to false to disable the source without removing the jar
+    enabled: true # set to false to disable Soundy without removing the jar
 ```
+
+Lavalink's built-in SoundCloud source uses the same source name, `soundcloud`, and is registered before plugins. If you leave it on, it takes SoundCloud links and searches before Soundy sees them, then fails on SoundCloud's current HLS-only tracks.
 
 ## Usage
 
-### Tracks
-Standard desktop and mobile URLs are supported:
-- `https://soundcloud.com/artist/track`
-- `https://m.soundcloud.com/artist/track`
-
-### Playlists
-SoundCloud sets and playlists are supported:
-- `https://soundcloud.com/artist/sets/playlist`
-
-SoundCloud returns only the first 5 tracks in initial responses. Soundy fetches the remaining tracks in batches of 50, supporting up to 500 tracks per playlist.
+### Links
+- Tracks: `https://soundcloud.com/<user>/<track>`
+- Playlists and sets: `https://soundcloud.com/<user>/sets/<playlist>`, including SoundCloud's system playlists (`https://soundcloud.com/discover/sets/...`)
+- Likes: `https://soundcloud.com/<user>/likes`
+- Secret links: track and playlist links ending in `/s-<token>`
+- Mobile links: `https://m.soundcloud.com/...`
+- Short links: `https://on.soundcloud.com/<code>`
 
 ### Searching
-You can search SoundCloud using the `scsearch:` prefix:
-- `scsearch:song title`
+- `scsearch:<query>` returns up to 10 tracks.
+- `scsearch[<offset>,<limit>]:<query>` skips `<offset>` results and returns up to `<limit>`, which can be at most 200.
 
-Returns up to 10 matching tracks formatted as a search playlist.
+Preview-only tracks (30-second SNIP clips) and tracks that SoundCloud marks as not streamable are skipped.
+
+## Library use
+`source` provides `SoundySourceManager` for Lavaplayer. `common` holds the HTTP client, `client_id` lookup and parsers it uses.
+
+```java
+AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
+playerManager.registerSourceManager(new SoundySourceManager());
+// If you also register Lavaplayer's remote sources, leave out its own SoundCloud source (same source name):
+AudioSourceManagers.registerRemoteSources(playerManager, SoundCloudAudioSourceManager.class);
+```
+
+Each release attaches `soundy-source-<version>.jar` and `soundy-common-<version>.jar`. Put both on your classpath next to `dev.arbjerg:lavaplayer`; `source` needs `common`.
+
+The release workflow also publishes them to GitHub Packages (`https://maven.pkg.github.com/lpaiu-cs/soundy-plugin`, as `com.waris4ly.soundy:common` and `com.waris4ly.soundy:source`). GitHub Packages requires authentication even for public packages, so your build needs a GitHub token with the `read:packages` scope to resolve them.
 
 ## Building
 To build the project from source:
