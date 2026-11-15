@@ -1,130 +1,107 @@
 package com.waris4ly.soundy;
 
-import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
-import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
+import com.sedmelluq.discord.lavaplayer.tools.JsonBrowser;
+import com.sedmelluq.discord.lavaplayer.tools.io.HttpClientTools;
+import com.sedmelluq.discord.lavaplayer.tools.io.HttpInterface;
+import com.sedmelluq.discord.lavaplayer.tools.io.HttpInterfaceManager;
 import com.sedmelluq.discord.lavaplayer.track.AudioItem;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
-import com.sedmelluq.discord.lavaplayer.track.AudioReference;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.function.Predicate;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 @EnabledIfEnvironmentVariable(named = "SOUNDY_IT", matches = "1")
 class SoundCloudPlaylistIT {
 
+	// Someone else's set, so it can change at any time. The tests check the
+	// loaded playlist against the set's live entry list, not fixed counts.
 	private static final String PLAYLIST_URL = "https://soundcloud.com/37dme5m3a58o/sets/alan-walker";
 
 	@Test
-	void loadsPlaylistFromUrl() throws Exception {
-		AudioPlayerManager manager = new DefaultAudioPlayerManager();
-		manager.registerSourceManager(new SoundySourceManager());
+	void loadsEveryPlayableEntryInPlaylistOrder() throws Exception {
+		List<JsonBrowser> entries = playlistEntries();
+		List<Long> loaded = trackIds(load(PLAYLIST_URL));
 
-		CompletableFuture<AudioItem> loaded = new CompletableFuture<>();
-		manager.loadItem(new AudioReference(PLAYLIST_URL, null), new AudioLoadResultHandler() {
-			@Override
-			public void trackLoaded(AudioTrack track) {
-				loaded.complete(track);
-			}
-			@Override
-			public void playlistLoaded(AudioPlaylist playlist) {
-				loaded.complete(playlist);
-			}
-			@Override
-			public void noMatches() {
-				loaded.complete(null);
-			}
-			@Override
-			public void loadFailed(FriendlyException exception) {
-				loaded.completeExceptionally(exception);
-			}
-		});
+		// Only the first five entries come fully populated; the rest are id-only
+		// stubs that have to be filled. Previews (SNIP) are checked separately,
+		// and region-blocked entries (BLOCK) may or may not load.
+		List<Long> missing = idsWhere(entries, policy -> !"SNIP".equals(policy) && !"BLOCK".equals(policy)).stream()
+				.filter(id -> !loaded.contains(id)).toList();
+		assertTrue(missing.isEmpty(), "playable entries missing from the loaded playlist: " + missing);
 
-		AudioItem item = loaded.get(60, TimeUnit.SECONDS);
-		assertNotNull(item, "playlist URL should resolve to something");
-		assertInstanceOf(AudioPlaylist.class, item, "expected a playlist");
-
-		AudioPlaylist playlist = (AudioPlaylist) item;
-		assertNotNull(playlist.getName(), "playlist should have a name");
-		assertFalse(playlist.getTracks().isEmpty(), "playlist should contain tracks");
-
-		// 4 of the 145 entries are 30-second previews (policy SNIP)
-		assertEquals(141, playlist.getTracks().size());
-
-		manager.shutdown();
+		List<Long> inPlaylistOrder = idsWhere(entries, policy -> true).stream().filter(loaded::contains).toList();
+		assertEquals(inPlaylistOrder, loaded, "tracks should all come from the set, in its order");
 	}
 
 	@Test
-	void loadsMobileUrl() throws Exception {
-		AudioPlayerManager manager = new DefaultAudioPlayerManager();
-		manager.registerSourceManager(new SoundySourceManager());
+	void dropsPreviewEntries() throws Exception {
+		List<Long> previews = idsWhere(playlistEntries(), "SNIP"::equals);
+		assumeFalse(previews.isEmpty(), "the set has no previews (policy SNIP) any more; use one that does");
 
-		CompletableFuture<AudioItem> loaded = new CompletableFuture<>();
-		manager.loadItem(new AudioReference("https://m.soundcloud.com/alanwalker/faded-slushii-remix-1", null),
-				new AudioLoadResultHandler() {
-					@Override
-					public void trackLoaded(AudioTrack track) {
-						loaded.complete(track);
-					}
-					@Override
-					public void playlistLoaded(AudioPlaylist playlist) {
-						loaded.complete(playlist);
-					}
-					@Override
-					public void noMatches() {
-						loaded.complete(null);
-					}
-					@Override
-					public void loadFailed(FriendlyException exception) {
-						loaded.completeExceptionally(exception);
-					}
-				});
-
-		AudioItem item = loaded.get(60, TimeUnit.SECONDS);
-		assertNotNull(item, "mobile URL should resolve to track");
-		assertInstanceOf(AudioTrack.class, item);
-		AudioTrack track = (AudioTrack) item;
-		assertEquals("Faded (SLUSHII Remix)", track.getInfo().title);
-
-		manager.shutdown();
+		List<Long> loaded = trackIds(load(PLAYLIST_URL));
+		List<Long> loadedPreviews = previews.stream().filter(loaded::contains).toList();
+		assertTrue(loadedPreviews.isEmpty(), "previews were loaded: " + loadedPreviews);
 	}
 
 	@Test
-	void handlesNonExistentUrlGracefully() throws Exception {
+	void loadsMobileUrl() {
+		AudioItem item = load("https://m.soundcloud.com/alanwalker/faded-slushii-remix-1");
+
+		// Compared by permalink rather than title: the owner can retitle the track
+		// without breaking this URL.
+		AudioTrack track = assertInstanceOf(AudioTrack.class, item, "mobile URL should resolve to a track");
+		assertEquals("https://soundcloud.com/alanwalker/faded-slushii-remix-1", track.getInfo().uri);
+	}
+
+	@Test
+	void handlesNonExistentUrlGracefully() {
+		assertNull(load("https://soundcloud.com/nonexistent-user-1234567/fake-track-not-found"),
+				"non-existent URL should be no match");
+	}
+
+	/** Loads through a player manager, as Lavalink does; null means no match. */
+	private static AudioItem load(String identifier) {
 		AudioPlayerManager manager = new DefaultAudioPlayerManager();
 		manager.registerSourceManager(new SoundySourceManager());
+		try {
+			return manager.loadItemSync(identifier);
+		} finally {
+			manager.shutdown();
+		}
+	}
 
-		CompletableFuture<AudioItem> loaded = new CompletableFuture<>();
-		manager.loadItem(
-				new AudioReference("https://soundcloud.com/nonexistent-user-1234567/fake-track-not-found", null),
-				new AudioLoadResultHandler() {
-					@Override
-					public void trackLoaded(AudioTrack track) {
-						loaded.complete(track);
-					}
-					@Override
-					public void playlistLoaded(AudioPlaylist playlist) {
-						loaded.complete(playlist);
-					}
-					@Override
-					public void noMatches() {
-						loaded.complete(null);
-					}
-					@Override
-					public void loadFailed(FriendlyException exception) {
-						loaded.completeExceptionally(exception);
-					}
-				});
+	/** The set's raw tracks[] from the API, read without PlaylistParser. */
+	private static List<JsonBrowser> playlistEntries() throws IOException {
+		try (HttpInterfaceManager manager = HttpClientTools.createDefaultThreadLocalManager();
+				HttpInterface http = manager.getInterface()) {
+			String path = "/resolve?url=" + URLEncoder.encode(PLAYLIST_URL, StandardCharsets.UTF_8);
+			String json = new SoundCloudHttpClient(new ClientIdProvider()).get(http, path);
+			return JsonBrowser.parse(json).get("tracks").values();
+		}
+	}
 
-		AudioItem item = loaded.get(60, TimeUnit.SECONDS);
-		assertNull(item, "non-existent URL should call noMatches");
+	private static List<Long> idsWhere(List<JsonBrowser> entries, Predicate<String> policy) {
+		return entries.stream().filter(entry -> policy.test(entry.get("policy").text()))
+				.map(entry -> entry.get("id").asLong(0)).toList();
+	}
 
-		manager.shutdown();
+	private static List<Long> trackIds(AudioItem item) {
+		AudioPlaylist playlist = assertInstanceOf(AudioPlaylist.class, item, "expected a playlist");
+		return playlist.getTracks().stream().map(track -> ((SoundyAudioTrackInfo) track.getInfo()).getTrackId())
+				.toList();
 	}
 }

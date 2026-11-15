@@ -87,7 +87,9 @@ class SoundCloudPlaybackIT {
 				Thread.sleep(5);
 		}
 
-		track.setPosition(TimeUnit.SECONDS.toMillis(150));
+		// The middle of the track, not a fixed offset that assumes its length.
+		long target = track.getDuration() / 2;
+		track.setPosition(target);
 
 		long framesAfterSeek = 0;
 		long maxPosition = 0;
@@ -105,8 +107,8 @@ class SoundCloudPlaybackIT {
 		manager.shutdown();
 
 		assertTrue(framesAfterSeek >= 50, "expected frames to continue after seek, got " + framesAfterSeek);
-		assertTrue(maxPosition >= TimeUnit.SECONDS.toMillis(149),
-				"position after seek should be >= 149s, was " + maxPosition + "ms");
+		assertTrue(maxPosition >= target - 1000,
+				"position after seek should be >= " + (target - 1000) + "ms, was " + maxPosition + "ms");
 	}
 
 	@Test
