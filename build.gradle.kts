@@ -7,7 +7,7 @@ plugins {
 
 allprojects {
     group = "com.waris4ly.soundy"
-    version = "1.0.4"
+    version = "1.1.1"
 
     repositories {
         mavenCentral()
@@ -55,7 +55,7 @@ configure(subprojects.filter { it.name != "plugin" }) {
         repositories {
             maven {
                 name = "GitHubPackages"
-                val repoOwner = System.getenv("GITHUB_REPOSITORY_OWNER") ?: "waris4ly"
+                val repoOwner = System.getenv("GITHUB_REPOSITORY_OWNER") ?: "lpaiu-cs"
                 url = uri("https://maven.pkg.github.com/$repoOwner/soundy-plugin")
                 credentials {
                     username = System.getenv("GITHUB_ACTOR")
@@ -73,11 +73,11 @@ configure(subprojects.filter { it.name != "plugin" }) {
                 pom {
                     name.set(project.name)
                     description.set("SoundCloud source manager for Lavaplayer")
-                    url.set("https://github.com/waris4ly/soundy-plugin")
+                    url.set("https://github.com/lpaiu-cs/soundy-plugin")
                     scm {
-                        connection.set("scm:git:git://github.com/waris4ly/soundy-plugin.git")
-                        developerConnection.set("scm:git:ssh://github.com:waris4ly/soundy-plugin.git")
-                        url.set("https://github.com/waris4ly/soundy-plugin")
+                        connection.set("scm:git:git://github.com/lpaiu-cs/soundy-plugin.git")
+                        developerConnection.set("scm:git:ssh://github.com:lpaiu-cs/soundy-plugin.git")
+                        url.set("https://github.com/lpaiu-cs/soundy-plugin")
                     }
                 }
             }
