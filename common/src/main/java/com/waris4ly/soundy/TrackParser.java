@@ -13,12 +13,13 @@ public class TrackParser {
 		String username = track.get("user").get("username").text();
 		boolean streamable = track.get("streamable").asBoolean(false);
 
+		// SNIP is a 30-second preview; BLOCK is region-blocked, with no
+		// transcodings at all.
 		String policy = track.get("policy").text();
-		boolean isPreview = "SNIP".equalsIgnoreCase(policy);
+		boolean playable = !"SNIP".equalsIgnoreCase(policy) && !"BLOCK".equalsIgnoreCase(policy);
 
 		return new TrackData(id, title != null ? title : "Unknown Title", permalinkUrl != null ? permalinkUrl : "",
-				duration, upgradeArtwork(artworkUrl), username != null ? username : "Unknown",
-				streamable && !isPreview);
+				duration, upgradeArtwork(artworkUrl), username != null ? username : "Unknown", streamable && playable);
 	}
 
 	private static String upgradeArtwork(String artworkUrl) {

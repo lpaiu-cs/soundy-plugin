@@ -38,6 +38,13 @@ class TrackParserTest {
 	}
 
 	@Test
+	void blockPolicyIsRegionBlockedAndNotStreamable() throws IOException {
+		// Region-blocked tracks come with streamable true but no transcodings.
+		assertFalse(parse("""
+				{"id": 1, "streamable": true, "policy": "BLOCK", "media": {"transcodings": []}}""").isStreamable());
+	}
+
+	@Test
 	void streamableFalseIsNotStreamable() throws IOException {
 		assertFalse(parse("""
 				{"id": 1, "streamable": false, "policy": "ALLOW"}""").isStreamable());
