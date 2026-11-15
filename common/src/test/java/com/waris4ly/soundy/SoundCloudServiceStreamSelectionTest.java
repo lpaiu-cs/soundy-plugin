@@ -35,6 +35,12 @@ class SoundCloudServiceStreamSelectionTest {
 	}
 
 	@Test
+	void prefersHlsAacEvenWhenMp3IsListedFirst() throws IOException {
+		assertPicked("aac_160k", HLS_FMP4, select(MP3, AAC_SQ));
+		assertPicked("aac_96k", HLS_FMP4, select(MP3, AAC_LQ));
+	}
+
+	@Test
 	void fallsBackToProgressiveMp3() throws IOException {
 		assertPicked("mp3_1_0", PROGRESSIVE, select(ABR_SQ, MP3));
 	}

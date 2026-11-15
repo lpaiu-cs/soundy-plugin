@@ -99,9 +99,9 @@ public class SoundCloudService {
 			String quality = t.get("quality").text();
 			String url = withSecretToken(t.get("url").text(), secretToken);
 
-			if ("progressive".equals(protocol) && mime != null && mime.contains("mpeg")) {
+			// No break: HLS AAC is preferred wherever it is listed.
+			if ("progressive".equals(protocol) && mime != null && mime.contains("mpeg") && progressiveUrl == null) {
 				progressiveUrl = url;
-				break;
 			}
 
 			if ("hls".equals(protocol) && mime != null && mime.startsWith("audio/mp4")) {
