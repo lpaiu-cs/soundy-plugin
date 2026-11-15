@@ -33,6 +33,7 @@ public class SoundCloudHttpClient {
 
 	private String executeWithRetry(HttpInterface http, String urlBase) throws IOException {
 		IOException lastException = null;
+		boolean clientIdRefreshed = false;
 
 		for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
 			if (attempt > 0) {
@@ -62,7 +63,10 @@ public class SoundCloudHttpClient {
 
 				lastException = new StatusException(status, url);
 
-				if (status == 401 || status == 403) {
+				// api-v2 answers a stale or bogus client_id with 401, so refresh it
+				// once. Any other 4xx (e.g. a 403 geo-block) is not transient.
+				if (status == 401 && !clientIdRefreshed) {
+					clientIdRefreshed = true;
 					clientIdProvider.invalidate();
 					continue;
 				}

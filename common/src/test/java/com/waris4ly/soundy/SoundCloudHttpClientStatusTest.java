@@ -46,6 +46,48 @@ class SoundCloudHttpClientStatusTest {
 	}
 
 	@Test
+	void unauthorizedRefreshesClientIdAndRetries() throws Exception {
+		CannedHttp http = new CannedHttp(401, 200);
+
+		assertEquals("{}", client.get(http, "/resolve?url=x"));
+		assertEquals(2, http.requests);
+		assertEquals(1, invalidations);
+	}
+
+	@Test
+	void unauthorizedRefreshesClientIdOnlyOnce() {
+		CannedHttp http = new CannedHttp(401, 401, 200);
+
+		SoundCloudHttpClient.StatusException e = assertThrows(SoundCloudHttpClient.StatusException.class,
+				() -> client.get(http, "/resolve?url=x"));
+
+		assertEquals(401, e.getStatusCode());
+		assertEquals(2, http.requests);
+		assertEquals(1, invalidations);
+	}
+
+	@Test
+	void forbiddenIsNeitherRetriedNorBlamedOnClientId() {
+		CannedHttp http = new CannedHttp(403, 200);
+
+		SoundCloudHttpClient.StatusException e = assertThrows(SoundCloudHttpClient.StatusException.class,
+				() -> client.get(http, "/resolve?url=x"));
+
+		assertEquals(403, e.getStatusCode());
+		assertEquals(1, http.requests);
+		assertEquals(0, invalidations);
+	}
+
+	@Test
+	void rateLimitAndServerErrorsAreRetried() throws Exception {
+		CannedHttp http = new CannedHttp(429, 503, 200);
+
+		assertEquals("{}", client.get(http, "/resolve?url=x"));
+		assertEquals(3, http.requests);
+		assertEquals(0, invalidations);
+	}
+
+	@Test
 	void statusStaysExactWhenTheUrlContains404() {
 		SoundCloudHttpClient.StatusException e = assertThrows(SoundCloudHttpClient.StatusException.class,
 				() -> client.get(new CannedHttp(400), "/resolve?url=https%3A%2F%2Fsoundcloud.com%2Fa%2F404"));
