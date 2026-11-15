@@ -109,6 +109,13 @@ public class SoundySourceManager implements AudioSourceManager {
 			Object resolved = service.resolveUrl(http, target);
 
 			if (resolved instanceof TrackData track) {
+				// Search and playlists skip these; a direct link would otherwise load
+				// and only fail once played.
+				if (!track.isStreamable()) {
+					throw new FriendlyException(
+							"This SoundCloud track can't be played: it is a preview, blocked in this region or not streamable.",
+							FriendlyException.Severity.COMMON, null);
+				}
 				return buildTrack(track);
 			}
 
