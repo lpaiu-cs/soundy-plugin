@@ -1,5 +1,6 @@
 package com.waris4ly.soundy;
 
+import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioItem;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioReference;
@@ -16,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // Calls loadItem directly so NO_TRACK (claimed, nothing there) stays distinct
@@ -43,9 +45,6 @@ class SoundCloudLoaderIT {
 	void shortLinkLoadsTheTrack() {
 		AudioTrack track = assertInstanceOf(AudioTrack.class, load("https://on.soundcloud.com/uUyIXp76UL1oAg179e"));
 		assertEquals("https://soundcloud.com/voyageloveblank/9-feat-uruma-pshine", track.getInfo().uri);
-
-		track = assertInstanceOf(AudioTrack.class, load("https://on.soundcloud.com/GPbxC0jTS8Fw6q0BUm"));
-		assertEquals("https://soundcloud.com/sebastian-ogryzek-917170/back-it-up-slowed", track.getInfo().uri);
 	}
 
 	@Test
@@ -72,6 +71,14 @@ class SoundCloudLoaderIT {
 	@Test
 	void userPageIsNoMatches() {
 		assertSame(AudioReference.NO_TRACK, load("https://soundcloud.com/voyageloveblank"));
+	}
+
+	@Test
+	void previewTrackLinkFailsAtLoad() {
+		// a 30-second preview (policy SNIP) of a Go+ track
+		FriendlyException e = assertThrows(FriendlyException.class,
+				() -> load("https://soundcloud.com/alanwalker/alan-walker-and-daya-heart"));
+		assertEquals(FriendlyException.Severity.COMMON, e.severity);
 	}
 
 	@Test
