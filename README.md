@@ -3,6 +3,8 @@ A SoundCloud source manager for Lavaplayer and Lavalink.
 
 SoundCloud dropped their old progressive MP3 streams and switched entirely to fragmented MP4 (AAC) HLS. This source adds proper support for those streams so playback, seeking, and playlists work without issues.
 
+Originally created by [waris4ly](https://github.com/waris4ly).
+
 ## Table of Contents
 - [Common](#common)
   - Information about the `common` module and usage.
@@ -82,7 +84,7 @@ lavalink:
 
 </details>
 
-Alternatively, download the `soundy-plugin-x.x.x.jar` from the [Releases](https://github.com/waris4ly/soundy-plugin/releases) page and place it into your `plugins` directory:
+Alternatively, download the `soundy-plugin-x.x.x.jar` from the [Releases](https://github.com/lpaiu-cs/soundy-plugin/releases) page and place it into your `plugins` directory:
 
 ```
 lavalink/
