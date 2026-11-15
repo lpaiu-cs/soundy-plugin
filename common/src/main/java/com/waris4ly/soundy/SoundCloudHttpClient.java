@@ -33,6 +33,7 @@ public class SoundCloudHttpClient {
 
 	private String executeWithRetry(HttpInterface http, String urlBase) throws IOException {
 		IOException lastException = null;
+		boolean clientIdRefreshed = false;
 
 		for (int attempt = 0; attempt < MAX_RETRIES; attempt++) {
 			if (attempt > 0) {
@@ -60,9 +61,12 @@ public class SoundCloudHttpClient {
 					return EntityUtils.toString(response.getEntity());
 				}
 
-				lastException = new IOException("SoundCloud API HTTP " + status + " for: " + url);
+				lastException = new StatusException(status, url);
 
-				if (status == 401 || status == 403) {
+				// api-v2 answers a stale or bogus client_id with 401, so refresh it
+				// once. Any other 4xx (e.g. a 403 geo-block) is not transient.
+				if (status == 401 && !clientIdRefreshed) {
+					clientIdRefreshed = true;
 					clientIdProvider.invalidate();
 					continue;
 				}
@@ -78,5 +82,20 @@ public class SoundCloudHttpClient {
 		throw lastException != null
 				? lastException
 				: new IOException("SoundCloud request failed after " + MAX_RETRIES + " retries");
+	}
+
+	/** A non-200 answer from SoundCloud. Branch on the status, not the message. */
+	public static class StatusException extends IOException {
+
+		private final int statusCode;
+
+		public StatusException(int statusCode, String url) {
+			super("SoundCloud API HTTP " + statusCode + " for: " + url);
+			this.statusCode = statusCode;
+		}
+
+		public int getStatusCode() {
+			return statusCode;
+		}
 	}
 }

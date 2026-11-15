@@ -49,6 +49,12 @@ public class PlaylistParser {
 
 		if (http != null && client != null && !missingIds.isEmpty()) {
 			int maxMissing = Math.min(missingIds.size(), MAX_FETCHED_TRACKS);
+			if (maxMissing < missingIds.size()) {
+				// SoundCloud caps playlists at 500 tracks and inlines the first
+				// five, so a normal set never gets here.
+				log.warn("Playlist {}: dropping {} tracks past the {}-track fetch limit", id,
+						missingIds.size() - maxMissing, MAX_FETCHED_TRACKS);
+			}
 			for (int i = 0; i < maxMissing; i += BATCH_SIZE) {
 				List<Long> batch = missingIds.subList(i, Math.min(i + BATCH_SIZE, maxMissing));
 				String idsParam = batch.stream().map(String::valueOf).collect(Collectors.joining(","));
@@ -60,7 +66,7 @@ public class PlaylistParser {
 						resolvedTracks.put(data.getId(), data);
 					}
 				} catch (Exception e) {
-					log.debug("Failed to fetch tracks batch: {}", idsParam, e);
+					log.warn("Playlist {}: dropping {} tracks because a /tracks?ids batch failed", id, batch.size(), e);
 				}
 			}
 		}

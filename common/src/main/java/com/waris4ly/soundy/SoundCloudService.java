@@ -8,8 +8,11 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 public class SoundCloudService {
+
+	private static final Pattern LIKES_URL = Pattern.compile("^https?://[^/]+/[^/?#]+/likes(?:[?#].*)?$");
 
 	private final SoundCloudHttpClient client;
 	private final TrackParser trackParser = new TrackParser();
@@ -28,13 +31,38 @@ public class SoundCloudService {
 		return switch (kind) {
 			case "track" -> trackParser.parse(data);
 			case "playlist", "system-playlist" -> playlistParser.parse(http, client, data);
+			// a profile and its /likes page both resolve to the user; null means
+			// nothing to play
+			case "user" -> LIKES_URL.matcher(url).matches() ? likes(http, data) : null;
 			default -> throw new IOException("Unsupported resource kind '" + kind + "' for: " + url);
 		};
 	}
 
+	// Like lavaplayer's built-in source: one page of up to 200 likes, liked
+	// playlists skipped.
+	private PlaylistData likes(HttpInterface http, JsonBrowser user) throws IOException {
+		long userId = user.get("id").asLong(0);
+		String username = user.get("username").text();
+		String json = client.get(http, "/users/" + userId + "/likes?limit=200&offset=0");
+
+		List<TrackData> tracks = new ArrayList<>();
+		for (JsonBrowser like : JsonBrowser.parse(json).get("collection").values()) {
+			JsonBrowser track = like.get("track");
+			if (!track.isNull()) {
+				tracks.add(trackParser.parse(track));
+			}
+		}
+		return new PlaylistData(userId, "Liked by " + username, user.get("permalink_url").text() + "/likes", username,
+				tracks);
+	}
+
 	public List<TrackData> search(HttpInterface http, String query) throws IOException {
+		return search(http, query, 0, 10);
+	}
+
+	public List<TrackData> search(HttpInterface http, String query, int offset, int limit) throws IOException {
 		String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
-		String json = client.get(http, "/search/tracks?q=" + encoded + "&limit=10");
+		String json = client.get(http, "/search/tracks?q=" + encoded + "&offset=" + offset + "&limit=" + limit);
 		JsonBrowser root = JsonBrowser.parse(json);
 
 		List<TrackData> results = new ArrayList<>();

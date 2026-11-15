@@ -12,6 +12,12 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.sedmelluq.discord.lavaplayer.track.BasicAudioPlaylist;
 
+import org.apache.http.Header;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpHead;
+import org.apache.http.client.protocol.HttpClientContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +27,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -28,7 +35,13 @@ public class SoundySourceManager implements AudioSourceManager {
 
 	private static final Logger log = LoggerFactory.getLogger(SoundySourceManager.class);
 	private static final Pattern SOUNDCLOUD_URL = Pattern.compile("^https?://(?:(?:www\\.|m\\.)?soundcloud\\.com)/.+");
+	// what the app's Share button gives; /resolve does not know these
+	static final Pattern SHORT_URL = Pattern.compile("^https://on\\.soundcloud\\.com/[A-Za-z0-9_-]+/?(?:\\?.*)?$");
 	private static final String SEARCH_PREFIX = "scsearch:";
+	// lavaplayer's built-in paging syntax: scsearch[offset,limit]:query
+	static final Pattern PAGED_SEARCH = Pattern.compile("scsearch\\[([0-9]{1,9}),([0-9]{1,9})\\]:\\s*(.*)\\s*");
+	private static final int DEFAULT_SEARCH_LIMIT = 10;
+	private static final int MAX_SEARCH_LIMIT = 200;
 
 	private final SoundCloudService service;
 	private final HttpInterfaceManager httpInterfaceManager;
@@ -68,10 +81,16 @@ public class SoundySourceManager implements AudioSourceManager {
 		String identifier = reference.identifier;
 
 		if (identifier.startsWith(SEARCH_PREFIX)) {
-			return loadSearch(identifier.substring(SEARCH_PREFIX.length()).trim());
+			return loadSearch(identifier.substring(SEARCH_PREFIX.length()).trim(), 0, DEFAULT_SEARCH_LIMIT);
 		}
 
-		if (SOUNDCLOUD_URL.matcher(identifier).matches()) {
+		Matcher paged = PAGED_SEARCH.matcher(identifier);
+		if (paged.matches()) {
+			return loadSearch(paged.group(3).trim(), Integer.parseInt(paged.group(1)),
+					Math.min(Integer.parseInt(paged.group(2)), MAX_SEARCH_LIMIT));
+		}
+
+		if (SOUNDCLOUD_URL.matcher(identifier).matches() || SHORT_URL.matcher(identifier).matches()) {
 			return loadFromUrl(identifier);
 		}
 
@@ -79,11 +98,15 @@ public class SoundySourceManager implements AudioSourceManager {
 	}
 
 	private AudioItem loadFromUrl(String url) {
-		if (url.contains("://m.soundcloud.com/")) {
-			url = url.replace("://m.soundcloud.com/", "://soundcloud.com/");
-		}
+		// /resolve answers m. and www. URLs with 404
+		url = url.replaceFirst("://(?:m|www)\\.soundcloud\\.com/", "://soundcloud.com/");
 		try (HttpInterface http = getHttpInterface()) {
-			Object resolved = service.resolveUrl(http, url);
+			String target = SHORT_URL.matcher(url).matches() ? followShortLink(http, url) : url;
+			if (target == null) {
+				return AudioReference.NO_TRACK;
+			}
+
+			Object resolved = service.resolveUrl(http, target);
 
 			if (resolved instanceof TrackData track) {
 				return buildTrack(track);
@@ -99,7 +122,7 @@ public class SoundySourceManager implements AudioSourceManager {
 
 			return AudioReference.NO_TRACK;
 		} catch (IOException e) {
-			if (e.getMessage() != null && e.getMessage().contains("404")) {
+			if (e instanceof SoundCloudHttpClient.StatusException status && status.getStatusCode() == 404) {
 				return AudioReference.NO_TRACK;
 			}
 			throw new FriendlyException("Failed to load SoundCloud URL: " + url, FriendlyException.Severity.SUSPICIOUS,
@@ -107,12 +130,38 @@ public class SoundySourceManager implements AudioSourceManager {
 		}
 	}
 
-	private AudioItem loadSearch(String query) {
+	/**
+	 * Reads where a short link points without loading the target page. Returns null
+	 * for an unknown code, which on.soundcloud.com answers with 404.
+	 */
+	static String followShortLink(HttpInterface http, String url) throws IOException {
+		HttpHead request = new HttpHead(url);
+		request.setConfig(
+				RequestConfig.copy(HttpClientTools.DEFAULT_REQUEST_CONFIG).setRedirectsEnabled(false).build());
+
+		// A request config sticks to the context it runs on, so keep it off the
+		// shared thread-local one: later requests there must still follow
+		// redirects.
+		try (CloseableHttpResponse response = http.getHttpClient().execute(request, HttpClientContext.create())) {
+			int status = response.getStatusLine().getStatusCode();
+			if (status == HttpStatus.SC_NOT_FOUND) {
+				return null;
+			}
+
+			Header location = response.getFirstHeader("Location");
+			if (location == null) {
+				throw new IOException("Short link answered HTTP " + status + " without a redirect: " + url);
+			}
+			return location.getValue();
+		}
+	}
+
+	private AudioItem loadSearch(String query, int offset, int limit) {
 		if (query.isEmpty()) {
 			return AudioReference.NO_TRACK;
 		}
 		try (HttpInterface http = getHttpInterface()) {
-			List<TrackData> results = service.search(http, query);
+			List<TrackData> results = service.search(http, query, offset, limit);
 			if (results.isEmpty()) {
 				return AudioReference.NO_TRACK;
 			}
