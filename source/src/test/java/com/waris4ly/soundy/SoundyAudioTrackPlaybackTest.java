@@ -64,6 +64,27 @@ class SoundyAudioTrackPlaybackTest {
 		assertEquals(1, source.refreshes);
 	}
 
+	@Test
+	void chainPastLastSegmentHoldsOnlyInit() throws IOException {
+		FakeSource source = new FakeSource();
+
+		assertEquals(List.of("old/init"), readAll(provider(source, DURATIONS.length)));
+	}
+
+	@Test
+	void seekAtOrPastEndOpensPastLastSegment() {
+		List<SoundyHlsPlaylistParser.Segment> segments = playlist("old", DURATIONS).segments; // 21398 ms
+
+		assertEquals(0, SoundyAudioTrack.seekSegmentIndex(segments, 21398, 0));
+		assertEquals(2, SoundyAudioTrack.seekSegmentIndex(segments, 21398, 21397));
+		assertEquals(3, SoundyAudioTrack.seekSegmentIndex(segments, 21398, 21398));
+		assertEquals(3, SoundyAudioTrack.seekSegmentIndex(segments, 21398, 60000));
+		// The track length decides the end when known, the playlist total
+		// otherwise.
+		assertEquals(2, SoundyAudioTrack.seekSegmentIndex(segments, 21500, 21450));
+		assertEquals(3, SoundyAudioTrack.seekSegmentIndex(segments, 0, 21398));
+	}
+
 	private SoundyAudioTrack.Fmp4StreamProvider provider(FakeSource source, int startSegment) {
 		return new SoundyAudioTrack.Fmp4StreamProvider(source, prefetchExecutor, playlist("old", DURATIONS),
 				startSegment);

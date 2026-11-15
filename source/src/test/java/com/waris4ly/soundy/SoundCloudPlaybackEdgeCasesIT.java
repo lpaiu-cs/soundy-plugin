@@ -4,10 +4,12 @@ import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
+import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioReference;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +63,26 @@ class SoundCloudPlaybackEdgeCasesIT {
 
 		assertTrue(frames >= 1000, "expected playback past the rejected segment, got " + frames + " frames");
 		assertEquals(2, playlistLoads.get(), "expected exactly one playlist refresh");
+	}
+
+	@Test
+	void seekPastEndFinishesTrack() throws Exception {
+		AudioTrack track = loadTrack(TRACK_URL);
+		AudioPlayer player = manager.createPlayer();
+		CompletableFuture<AudioTrackEndReason> ended = new CompletableFuture<>();
+		player.addListener(new AudioEventAdapter() {
+			@Override
+			public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
+				ended.complete(endReason);
+			}
+		});
+
+		track.setPosition(track.getDuration() + 10_000);
+		player.playTrack(track);
+		long frames = pullFrames(player, 50, 30_000);
+
+		assertEquals(0, frames, "seeking past the end must not restart the track");
+		assertEquals(AudioTrackEndReason.FINISHED, ended.get(5, TimeUnit.SECONDS));
 	}
 
 	private static SoundyHlsPlaylistParser.Playlist withForgedSignatures(SoundyHlsPlaylistParser.Playlist playlist,

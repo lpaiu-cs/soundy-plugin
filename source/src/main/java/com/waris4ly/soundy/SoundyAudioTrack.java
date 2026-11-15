@@ -129,6 +129,16 @@ public class SoundyAudioTrack extends DelegatedAudioTrack {
 		return totalMs;
 	}
 
+	/**
+	 * Segment to open a chain at for a seek. A position at or past the end maps one
+	 * past the last segment: that chain has no media, so the reader hits EOF and
+	 * the track ends instead of restarting.
+	 */
+	static int seekSegmentIndex(List<SoundyHlsPlaylistParser.Segment> segments, long trackLengthMs, long positionMs) {
+		long endMs = trackLengthMs > 0 ? trackLengthMs : totalDurationMs(segments);
+		return endMs > 0 && positionMs >= endMs ? segments.size() : segmentIndexFor(segments, positionMs);
+	}
+
 	private class Fmp4Player implements SegmentSource {
 		private static final int MAX_FETCH_RETRIES = 3;
 		private static final long RETRY_BACKOFF_MS = 150L;
@@ -152,18 +162,9 @@ public class SoundyAudioTrack extends DelegatedAudioTrack {
 		}
 
 		private void performSeek(long positionMs) throws Exception {
-			long duration = trackInfo.length;
-			long clamped = Math.max(0, positionMs);
-
-			long effectiveEnd = duration > 0 ? duration : totalDurationMs(playlist.segments);
-			if (effectiveEnd > 0 && clamped >= effectiveEnd) {
-				log.warn("Track {}: Out of range seek position {} ms clamped to start (duration: {} ms)",
-						trackInfo.identifier, positionMs, effectiveEnd);
-				clamped = 0;
-			}
-
-			log.debug("Seeking track {} to {} ms", trackInfo.identifier, clamped);
-			openChain(segmentIndexFor(playlist.segments, clamped), clamped);
+			long position = Math.max(0, positionMs);
+			log.debug("Seeking track {} to {} ms", trackInfo.identifier, position);
+			openChain(seekSegmentIndex(playlist.segments, trackInfo.length, position), position);
 		}
 
 		private void ensureOpened() throws Exception {
