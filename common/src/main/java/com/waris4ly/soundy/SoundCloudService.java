@@ -57,8 +57,12 @@ public class SoundCloudService {
 	}
 
 	public List<TrackData> search(HttpInterface http, String query) throws IOException {
+		return search(http, query, 0, 10);
+	}
+
+	public List<TrackData> search(HttpInterface http, String query, int offset, int limit) throws IOException {
 		String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
-		String json = client.get(http, "/search/tracks?q=" + encoded + "&limit=10");
+		String json = client.get(http, "/search/tracks?q=" + encoded + "&offset=" + offset + "&limit=" + limit);
 		JsonBrowser root = JsonBrowser.parse(json);
 
 		List<TrackData> results = new ArrayList<>();

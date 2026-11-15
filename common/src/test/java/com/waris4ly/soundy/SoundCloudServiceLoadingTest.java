@@ -71,4 +71,16 @@ class SoundCloudServiceLoadingTest {
 		assertNull(new SoundCloudService(client).resolveUrl(null, "https://soundcloud.com/voyageloveblank"));
 		assertEquals(1, client.paths.size(), "a profile does not fetch likes");
 	}
+
+	@Test
+	void searchPassesOffsetAndLimit() throws IOException {
+		FakeClient client = new FakeClient(Map.of("/search/tracks", "{\"collection\": []}"));
+		SoundCloudService service = new SoundCloudService(client);
+
+		service.search(null, "lofi beats", 20, 50);
+		service.search(null, "lofi beats");
+
+		assertEquals(List.of("/search/tracks?q=lofi+beats&offset=20&limit=50",
+				"/search/tracks?q=lofi+beats&offset=0&limit=10"), client.paths);
+	}
 }

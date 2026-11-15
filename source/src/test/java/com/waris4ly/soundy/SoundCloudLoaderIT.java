@@ -9,6 +9,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -63,5 +66,23 @@ class SoundCloudLoaderIT {
 	@Test
 	void userPageIsNoMatches() {
 		assertSame(AudioReference.NO_TRACK, load("https://soundcloud.com/voyageloveblank"));
+	}
+
+	@Test
+	void pagedSearchPassesLimitAndOffset() {
+		List<String> first = identifiers(load("scsearch[0,50]:lofi"));
+		assertTrue(first.size() > 10 && first.size() <= 50, "limit 50 gave " + first.size());
+
+		List<String> shifted = identifiers(load("scsearch[10,10]:lofi"));
+		int start = first.indexOf(shifted.get(0));
+		assertTrue(start > 0, "offset 10 should start past the head of the first page, was at " + start);
+
+		int capped = identifiers(load("scsearch[0,500]:lofi")).size();
+		assertTrue(capped > 50 && capped <= 200, "limit 500 should be capped at 200, gave " + capped);
+	}
+
+	private static List<String> identifiers(AudioItem item) {
+		return assertInstanceOf(AudioPlaylist.class, item).getTracks().stream().map(AudioTrack::getIdentifier)
+				.collect(Collectors.toList());
 	}
 }

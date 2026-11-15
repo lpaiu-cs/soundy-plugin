@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -37,6 +38,10 @@ public class SoundySourceManager implements AudioSourceManager {
 	// what the app's Share button gives; /resolve does not know these
 	static final Pattern SHORT_URL = Pattern.compile("^https://on\\.soundcloud\\.com/[A-Za-z0-9_-]+/?(?:\\?.*)?$");
 	private static final String SEARCH_PREFIX = "scsearch:";
+	// lavaplayer's built-in paging syntax: scsearch[offset,limit]:query
+	static final Pattern PAGED_SEARCH = Pattern.compile("scsearch\\[([0-9]{1,9}),([0-9]{1,9})\\]:\\s*(.*)\\s*");
+	private static final int DEFAULT_SEARCH_LIMIT = 10;
+	private static final int MAX_SEARCH_LIMIT = 200;
 
 	private final SoundCloudService service;
 	private final HttpInterfaceManager httpInterfaceManager;
@@ -76,7 +81,13 @@ public class SoundySourceManager implements AudioSourceManager {
 		String identifier = reference.identifier;
 
 		if (identifier.startsWith(SEARCH_PREFIX)) {
-			return loadSearch(identifier.substring(SEARCH_PREFIX.length()).trim());
+			return loadSearch(identifier.substring(SEARCH_PREFIX.length()).trim(), 0, DEFAULT_SEARCH_LIMIT);
+		}
+
+		Matcher paged = PAGED_SEARCH.matcher(identifier);
+		if (paged.matches()) {
+			return loadSearch(paged.group(3).trim(), Integer.parseInt(paged.group(1)),
+					Math.min(Integer.parseInt(paged.group(2)), MAX_SEARCH_LIMIT));
 		}
 
 		if (SOUNDCLOUD_URL.matcher(identifier).matches() || SHORT_URL.matcher(identifier).matches()) {
@@ -146,12 +157,12 @@ public class SoundySourceManager implements AudioSourceManager {
 		}
 	}
 
-	private AudioItem loadSearch(String query) {
+	private AudioItem loadSearch(String query, int offset, int limit) {
 		if (query.isEmpty()) {
 			return AudioReference.NO_TRACK;
 		}
 		try (HttpInterface http = getHttpInterface()) {
-			List<TrackData> results = service.search(http, query);
+			List<TrackData> results = service.search(http, query, offset, limit);
 			if (results.isEmpty()) {
 				return AudioReference.NO_TRACK;
 			}
