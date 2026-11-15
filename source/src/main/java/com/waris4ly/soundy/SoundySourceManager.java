@@ -12,6 +12,12 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.sedmelluq.discord.lavaplayer.track.BasicAudioPlaylist;
 
+import org.apache.http.Header;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpHead;
+import org.apache.http.client.protocol.HttpClientContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +34,8 @@ public class SoundySourceManager implements AudioSourceManager {
 
 	private static final Logger log = LoggerFactory.getLogger(SoundySourceManager.class);
 	private static final Pattern SOUNDCLOUD_URL = Pattern.compile("^https?://(?:(?:www\\.|m\\.)?soundcloud\\.com)/.+");
+	// what the app's Share button gives; /resolve does not know these
+	static final Pattern SHORT_URL = Pattern.compile("^https://on\\.soundcloud\\.com/[A-Za-z0-9_-]+/?(?:\\?.*)?$");
 	private static final String SEARCH_PREFIX = "scsearch:";
 
 	private final SoundCloudService service;
@@ -71,7 +79,7 @@ public class SoundySourceManager implements AudioSourceManager {
 			return loadSearch(identifier.substring(SEARCH_PREFIX.length()).trim());
 		}
 
-		if (SOUNDCLOUD_URL.matcher(identifier).matches()) {
+		if (SOUNDCLOUD_URL.matcher(identifier).matches() || SHORT_URL.matcher(identifier).matches()) {
 			return loadFromUrl(identifier);
 		}
 
@@ -83,7 +91,12 @@ public class SoundySourceManager implements AudioSourceManager {
 			url = url.replace("://m.soundcloud.com/", "://soundcloud.com/");
 		}
 		try (HttpInterface http = getHttpInterface()) {
-			Object resolved = service.resolveUrl(http, url);
+			String target = SHORT_URL.matcher(url).matches() ? followShortLink(http, url) : url;
+			if (target == null) {
+				return AudioReference.NO_TRACK;
+			}
+
+			Object resolved = service.resolveUrl(http, target);
 
 			if (resolved instanceof TrackData track) {
 				return buildTrack(track);
@@ -104,6 +117,32 @@ public class SoundySourceManager implements AudioSourceManager {
 			}
 			throw new FriendlyException("Failed to load SoundCloud URL: " + url, FriendlyException.Severity.SUSPICIOUS,
 					e);
+		}
+	}
+
+	/**
+	 * Reads where a short link points without loading the target page. Returns null
+	 * for an unknown code, which on.soundcloud.com answers with 404.
+	 */
+	static String followShortLink(HttpInterface http, String url) throws IOException {
+		HttpHead request = new HttpHead(url);
+		request.setConfig(
+				RequestConfig.copy(HttpClientTools.DEFAULT_REQUEST_CONFIG).setRedirectsEnabled(false).build());
+
+		// A request config sticks to the context it runs on, so keep it off the
+		// shared thread-local one: later requests there must still follow
+		// redirects.
+		try (CloseableHttpResponse response = http.getHttpClient().execute(request, HttpClientContext.create())) {
+			int status = response.getStatusLine().getStatusCode();
+			if (status == HttpStatus.SC_NOT_FOUND) {
+				return null;
+			}
+
+			Header location = response.getFirstHeader("Location");
+			if (location == null) {
+				throw new IOException("Short link answered HTTP " + status + " without a redirect: " + url);
+			}
+			return location.getValue();
 		}
 	}
 
