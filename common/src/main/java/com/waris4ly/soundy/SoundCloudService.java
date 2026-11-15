@@ -73,7 +73,12 @@ public class SoundCloudService {
 	}
 
 	public StreamData getStream(HttpInterface http, long trackId) throws IOException {
-		String json = client.get(http, "/tracks/" + trackId);
+		return getStream(http, trackId, null);
+	}
+
+	public StreamData getStream(HttpInterface http, long trackId, String secretToken) throws IOException {
+		// A private track answers 404 without its secret token.
+		String json = client.get(http, withSecretToken("/tracks/" + trackId, secretToken));
 		JsonBrowser track = JsonBrowser.parse(json);
 		JsonBrowser transcodings = track.get("media").get("transcodings");
 
@@ -92,7 +97,7 @@ public class SoundCloudService {
 			String protocol = t.get("format").get("protocol").text();
 			String mime = t.get("format").get("mime_type").text();
 			String quality = t.get("quality").text();
-			String url = t.get("url").text();
+			String url = withSecretToken(t.get("url").text(), secretToken);
 
 			if ("progressive".equals(protocol) && mime != null && mime.contains("mpeg")) {
 				progressiveUrl = url;
@@ -130,5 +135,15 @@ public class SoundCloudService {
 			throw new IOException("Empty stream URL from: " + transcodingUrl);
 		}
 		return url;
+	}
+
+	// The API already puts the token on a private track's transcoding URLs; add
+	// it only where it is missing.
+	private static String withSecretToken(String url, String secretToken) {
+		if (url == null || secretToken == null || url.contains("secret_token=")) {
+			return url;
+		}
+		return url + (url.contains("?") ? "&" : "?") + "secret_token="
+				+ URLEncoder.encode(secretToken, StandardCharsets.UTF_8);
 	}
 }

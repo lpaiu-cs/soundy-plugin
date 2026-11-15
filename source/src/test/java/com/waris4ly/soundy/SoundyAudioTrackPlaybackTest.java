@@ -14,6 +14,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SoundyAudioTrackPlaybackTest {
@@ -83,6 +84,20 @@ class SoundyAudioTrackPlaybackTest {
 		// otherwise.
 		assertEquals(2, SoundyAudioTrack.seekSegmentIndex(segments, 21500, 21450));
 		assertEquals(3, SoundyAudioTrack.seekSegmentIndex(segments, 0, 21398));
+	}
+
+	@Test
+	void secretTokenComesFromPrivatePermalink() {
+		assertEquals("s-8Pjrp",
+				info("https://soundcloud.com/jaimemf/youtube-dl-test-video-a-y-baw/s-8Pjrp").getSecretToken());
+		assertNull(info("https://soundcloud.com/jhfly/poetic-justice").getSecretToken());
+		// A public track whose slug merely starts with "s-".
+		assertNull(info("https://soundcloud.com/someone/s-curve").getSecretToken());
+		assertNull(info(null).getSecretToken());
+	}
+
+	private static SoundyAudioTrackInfo info(String uri) {
+		return new SoundyAudioTrackInfo("title", "author", 9927, "1", uri, 1, null);
 	}
 
 	private SoundyAudioTrack.Fmp4StreamProvider provider(FakeSource source, int startSegment) {

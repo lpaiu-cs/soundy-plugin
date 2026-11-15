@@ -6,6 +6,8 @@ import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
+import com.sedmelluq.discord.lavaplayer.tools.io.MessageInput;
+import com.sedmelluq.discord.lavaplayer.tools.io.MessageOutput;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioReference;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
@@ -15,6 +17,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +33,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SoundCloudPlaybackEdgeCasesIT {
 
 	private static final String TRACK_URL = "https://soundcloud.com/jhfly/poetic-justice";
+
+	// A private track whose secret link is public: a fixture of yt-dlp's tests.
+	private static final String SECRET_TRACK_URL = "https://soundcloud.com/jaimemf/youtube-dl-test-video-a-y-baw/s-8Pjrp";
 
 	private final AudioPlayerManager manager = new DefaultAudioPlayerManager();
 	private final SoundySourceManager sourceManager = new SoundySourceManager();
@@ -83,6 +90,23 @@ class SoundCloudPlaybackEdgeCasesIT {
 
 		assertEquals(0, frames, "seeking past the end must not restart the track");
 		assertEquals(AudioTrackEndReason.FINISHED, ended.get(5, TimeUnit.SECONDS));
+	}
+
+	@Test
+	void secretLinkPlaysAfterEncodeDecode() throws Exception {
+		AudioTrack loaded = loadTrack(SECRET_TRACK_URL);
+
+		// Played from its encoded form, as Lavalink clients hand tracks back.
+		ByteArrayOutputStream encoded = new ByteArrayOutputStream();
+		manager.encodeTrack(new MessageOutput(encoded), loaded);
+		AudioTrack decoded = manager
+				.decodeTrack(new MessageInput(new ByteArrayInputStream(encoded.toByteArray()))).decodedTrack;
+		assertEquals(SECRET_TRACK_URL, decoded.getInfo().uri);
+
+		AudioPlayer player = manager.createPlayer();
+		player.playTrack(decoded);
+		long frames = pullFrames(player, 50, 60_000);
+		assertTrue(frames >= 50, "expected the private track to decode, got " + frames + " frames");
 	}
 
 	private static SoundyHlsPlaylistParser.Playlist withForgedSignatures(SoundyHlsPlaylistParser.Playlist playlist,

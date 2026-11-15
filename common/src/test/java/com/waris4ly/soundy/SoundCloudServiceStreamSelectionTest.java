@@ -4,6 +4,8 @@ import com.sedmelluq.discord.lavaplayer.tools.io.HttpInterface;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import static com.waris4ly.soundy.StreamData.Protocol.HLS_FMP4;
 import static com.waris4ly.soundy.StreamData.Protocol.PROGRESSIVE;
@@ -48,6 +50,17 @@ class SoundCloudServiceStreamSelectionTest {
 		assertThrows(IOException.class, () -> select());
 	}
 
+	@Test
+	void sendsSecretTokenOnBothRequests() throws IOException {
+		String stream = MEDIA + "aac_160k/stream/hls";
+		List<String> expected = List.of("/tracks/1?secret_token=s-8Pjrp", stream + "?secret_token=s-8Pjrp");
+
+		assertEquals(expected, requests(AAC_SQ, "s-8Pjrp"));
+		// The API already tags a private track's transcoding URLs: no duplicate.
+		assertEquals(expected, requests(AAC_SQ.replace("/stream/hls", "/stream/hls?secret_token=s-8Pjrp"), "s-8Pjrp"));
+		assertEquals(List.of("/tracks/1", stream), requests(AAC_SQ, null));
+	}
+
 	private static String transcoding(String preset, String protocol, String mime, String quality, boolean snipped) {
 		return String.format(
 				"{\"url\": \"%s%s/stream/%s\", \"preset\": \"%s\", \"snipped\": %b,"
@@ -73,6 +86,28 @@ class SoundCloudServiceStreamSelectionTest {
 			}
 		};
 		return new SoundCloudService(client).getStream(null, 1);
+	}
+
+	/**
+	 * The API paths and URLs getStream requests for a track with this transcoding.
+	 */
+	private static List<String> requests(String transcoding, String secretToken) throws IOException {
+		List<String> requests = new ArrayList<>();
+		SoundCloudHttpClient client = new SoundCloudHttpClient(new ClientIdProvider()) {
+			@Override
+			public String get(HttpInterface http, String path) {
+				requests.add(path);
+				return "{\"media\": {\"transcodings\": [" + transcoding + "]}}";
+			}
+
+			@Override
+			public String getAbsolute(HttpInterface http, String url) {
+				requests.add(url);
+				return "{\"url\": \"" + url + "\"}";
+			}
+		};
+		new SoundCloudService(client).getStream(null, 1, secretToken);
+		return requests;
 	}
 
 	private static void assertPicked(String preset, StreamData.Protocol protocol, StreamData stream) {

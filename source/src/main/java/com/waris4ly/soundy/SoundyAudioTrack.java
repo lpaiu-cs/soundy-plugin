@@ -57,7 +57,7 @@ public class SoundyAudioTrack extends DelegatedAudioTrack {
 	private StreamData resolveStream() throws IOException {
 		SoundyAudioTrackInfo info = (SoundyAudioTrackInfo) trackInfo;
 		try (HttpInterface http = sourceManager.getHttpInterface()) {
-			return sourceManager.getService().getStream(http, info.getTrackId());
+			return sourceManager.getService().getStream(http, info.getTrackId(), info.getSecretToken());
 		}
 	}
 
