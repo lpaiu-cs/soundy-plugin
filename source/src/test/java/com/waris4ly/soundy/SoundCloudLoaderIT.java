@@ -54,6 +54,12 @@ class SoundCloudLoaderIT {
 	}
 
 	@Test
+	void wwwUrlLoadsTheTrack() {
+		AudioTrack track = assertInstanceOf(AudioTrack.class, load("https://www.soundcloud.com/jhfly/poetic-justice"));
+		assertEquals("https://soundcloud.com/jhfly/poetic-justice", track.getInfo().uri);
+	}
+
+	@Test
 	void likesLoadAsAPlaylist() {
 		AudioPlaylist likes = assertInstanceOf(AudioPlaylist.class,
 				load("https://soundcloud.com/voyageloveblank/likes"));

@@ -98,9 +98,8 @@ public class SoundySourceManager implements AudioSourceManager {
 	}
 
 	private AudioItem loadFromUrl(String url) {
-		if (url.contains("://m.soundcloud.com/")) {
-			url = url.replace("://m.soundcloud.com/", "://soundcloud.com/");
-		}
+		// /resolve answers m. and www. URLs with 404
+		url = url.replaceFirst("://(?:m|www)\\.soundcloud\\.com/", "://soundcloud.com/");
 		try (HttpInterface http = getHttpInterface()) {
 			String target = SHORT_URL.matcher(url).matches() ? followShortLink(http, url) : url;
 			if (target == null) {
