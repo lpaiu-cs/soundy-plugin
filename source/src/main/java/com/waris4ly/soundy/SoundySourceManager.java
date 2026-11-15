@@ -99,7 +99,7 @@ public class SoundySourceManager implements AudioSourceManager {
 
 			return AudioReference.NO_TRACK;
 		} catch (IOException e) {
-			if (e.getMessage() != null && e.getMessage().contains("404")) {
+			if (e instanceof SoundCloudHttpClient.StatusException status && status.getStatusCode() == 404) {
 				return AudioReference.NO_TRACK;
 			}
 			throw new FriendlyException("Failed to load SoundCloud URL: " + url, FriendlyException.Severity.SUSPICIOUS,

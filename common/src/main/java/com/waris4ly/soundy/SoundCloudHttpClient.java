@@ -60,7 +60,7 @@ public class SoundCloudHttpClient {
 					return EntityUtils.toString(response.getEntity());
 				}
 
-				lastException = new IOException("SoundCloud API HTTP " + status + " for: " + url);
+				lastException = new StatusException(status, url);
 
 				if (status == 401 || status == 403) {
 					clientIdProvider.invalidate();
@@ -78,5 +78,20 @@ public class SoundCloudHttpClient {
 		throw lastException != null
 				? lastException
 				: new IOException("SoundCloud request failed after " + MAX_RETRIES + " retries");
+	}
+
+	/** A non-200 answer from SoundCloud. Branch on the status, not the message. */
+	public static class StatusException extends IOException {
+
+		private final int statusCode;
+
+		public StatusException(int statusCode, String url) {
+			super("SoundCloud API HTTP " + statusCode + " for: " + url);
+			this.statusCode = statusCode;
+		}
+
+		public int getStatusCode() {
+			return statusCode;
+		}
 	}
 }
