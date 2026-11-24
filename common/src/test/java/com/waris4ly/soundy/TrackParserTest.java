@@ -20,7 +20,10 @@ class TrackParserTest {
 		TrackData track = parse("""
 				{"id": 42, "title": "Song", "permalink_url": "https://soundcloud.com/artist/song",
 				 "duration": 180000, "artwork_url": "https://i1.sndcdn.com/artworks-abc-large.jpg",
-				 "user": {"username": "artist"}, "streamable": true, "policy": "ALLOW"}""");
+				 "user": {"username": "artist"}, "streamable": true, "policy": "ALLOW",
+				 "media": {"transcodings": [{"url": "https://api-v2.soundcloud.com/media/x/stream/hls",
+				  "snipped": false, "quality": "sq",
+				  "format": {"protocol": "hls", "mime_type": "audio/mp4; codecs=\\"mp4a.40.2\\""}}]}}""");
 
 		assertEquals(42, track.getId());
 		assertEquals("Song", track.getTitle());
@@ -42,6 +45,29 @@ class TrackParserTest {
 		// Region-blocked tracks come with streamable true but no transcodings.
 		assertFalse(parse("""
 				{"id": 1, "streamable": true, "policy": "BLOCK", "media": {"transcodings": []}}""").isStreamable());
+	}
+
+	@Test
+	void drmTrackIsNotStreamable() throws IOException {
+		// The shape the API gives a DRM track (1999052727, 2026-11-25): policy ALLOW
+		// and
+		// streamable, so the policy check passed it, but every transcoding is
+		// encrypted.
+		TrackData track = parse("""
+				{"id": 1999052727, "streamable": true, "policy": "ALLOW", "media": {"transcodings": [
+				 {"url": "u1", "snipped": false, "quality": "sq",
+				  "format": {"protocol": "cbc-encrypted-hls", "mime_type": "audio/mp4; codecs=\\"mp4a.40.2\\""}},
+				 {"url": "u2", "snipped": false, "quality": "sq",
+				  "format": {"protocol": "ctr-encrypted-hls", "mime_type": "audio/mp4; codecs=\\"mp4a.40.2\\""}}]}}""");
+
+		assertFalse(track.isStreamable());
+		assertEquals(StreamSelection.Unplayable.DRM, track.getStreamSelection().getUnplayable());
+	}
+
+	@Test
+	void trackWithoutTranscodingsIsNotStreamable() throws IOException {
+		assertEquals(StreamSelection.Unplayable.NO_STREAM, parse("""
+				{"id": 1, "streamable": true, "policy": "ALLOW"}""").getStreamSelection().getUnplayable());
 	}
 
 	@Test

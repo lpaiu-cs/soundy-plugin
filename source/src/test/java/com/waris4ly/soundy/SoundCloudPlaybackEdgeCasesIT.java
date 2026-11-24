@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @EnabledIfEnvironmentVariable(named = "SOUNDY_IT", matches = "1")
@@ -36,6 +37,11 @@ class SoundCloudPlaybackEdgeCasesIT {
 
 	// A private track whose secret link is public: a fixture of yt-dlp's tests.
 	private static final String SECRET_TRACK_URL = "https://soundcloud.com/jaimemf/youtube-dl-test-video-a-y-baw/s-8Pjrp";
+
+	// Policy ALLOW, but every transcoding is cbc- or ctr-encrypted-hls
+	// (2026-11-25).
+	static final String DRM_TRACK_URL = "https://soundcloud.com/novax21777/newjeans-jersey-club";
+	private static final long DRM_TRACK_ID = 1999052727L;
 
 	private final AudioPlayerManager manager = new DefaultAudioPlayerManager();
 	private final SoundySourceManager sourceManager = new SoundySourceManager();
@@ -107,6 +113,39 @@ class SoundCloudPlaybackEdgeCasesIT {
 		player.playTrack(decoded);
 		long frames = pullFrames(player, 50, 60_000);
 		assertTrue(frames >= 50, "expected the private track to decode, got " + frames + " frames");
+	}
+
+	@Test
+	void drmTrackFailsOnPlayWithItsCode() throws Exception {
+		// Built from its id, as a client hands back a track it loaded before the
+		// track turned DRM; loading it now fails (SoundCloudLoaderIT).
+		AudioTrack track = new SoundyAudioTrack(new SoundyAudioTrackInfo("NewJeans", "NovaX", 0,
+				String.valueOf(DRM_TRACK_ID), DRM_TRACK_URL, DRM_TRACK_ID, null), sourceManager);
+		AudioPlayer player = manager.createPlayer();
+		CompletableFuture<FriendlyException> failed = new CompletableFuture<>();
+		CompletableFuture<AudioTrackEndReason> ended = new CompletableFuture<>();
+		player.addListener(new AudioEventAdapter() {
+			@Override
+			public void onTrackException(AudioPlayer player, AudioTrack track, FriendlyException exception) {
+				failed.complete(exception);
+			}
+
+			@Override
+			public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
+				ended.complete(endReason);
+			}
+		});
+
+		player.playTrack(track);
+		long frames = pullFrames(player, 10, 30_000);
+
+		assertEquals(0, frames);
+		assertEquals(AudioTrackEndReason.LOAD_FAILED, ended.get(5, TimeUnit.SECONDS));
+		// Lavaplayer passes it on unwrapped, so its message is what Lavalink's
+		// TrackExceptionEvent carries.
+		UnplayableTrackException e = assertInstanceOf(UnplayableTrackException.class, failed.get(5, TimeUnit.SECONDS));
+		assertEquals(StreamSelection.Unplayable.DRM, e.getReason());
+		assertTrue(e.getMessage().contains("soundy={\"code\":\"SOUNDCLOUD_DRM\",\"id\":1999052727,"), e.getMessage());
 	}
 
 	private static SoundyHlsPlaylistParser.Playlist withForgedSignatures(SoundyHlsPlaylistParser.Playlist playlist,
