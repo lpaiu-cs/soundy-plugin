@@ -70,8 +70,10 @@ A track plays only if SoundCloud offers it as a full-length (not preview) stream
 Searches, playlists and likes skip the tracks that fail it. A direct link to one fails to load, and a track that stops passing after it was loaded (for example, played from an encoded track) fails when played. Both errors end with a one-line JSON object after `soundy=`:
 
 ```
-This SoundCloud track can't be played: it is DRM-protected. soundy={"code":"SOUNDCLOUD_DRM","id":1999052727,"title":"NewJeans","author":"NovaX","uri":"https://soundcloud.com/novax21777/newjeans-jersey-club"}
+This SoundCloud track can't be played: it is DRM-protected. soundy={"code":"SOUNDCLOUD_DRM","id":1999052727,"title":"NewJeans","author":"NovaX","duration":122588,"uri":"https://soundcloud.com/novax21777/newjeans-jersey-club"}
 ```
+
+`duration` is in milliseconds. With `title` and `author` it lets a client look for the same recording elsewhere and tell it from another version (remix, live, music-video edit).
 
 In Lavalink's `/v4/loadtracks` this is the last `Caused by:` line of `data.causeStackTrace`, and in a `TrackExceptionEvent` it is `exception.message`. The marker, the field names and the codes are stable; the sentence before them may change.
 

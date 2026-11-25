@@ -72,9 +72,8 @@ class SoundCloudServiceStreamSelectionTest {
 				CTR_AAC_LQ, CBC_ABR, CTR_ABR);
 
 		assertTrue(
-				e.getMessage()
-						.endsWith("soundy={\"code\":\"SOUNDCLOUD_DRM\",\"id\":1,\"title\":\"Song\","
-								+ "\"author\":\"artist\",\"uri\":\"https://soundcloud.com/artist/song\"}"),
+				e.getMessage().endsWith("soundy={\"code\":\"SOUNDCLOUD_DRM\",\"id\":1,\"title\":\"Song\","
+						+ "\"author\":\"artist\",\"duration\":200000,\"uri\":\"https://soundcloud.com/artist/song\"}"),
 				e.getMessage());
 	}
 
@@ -131,7 +130,7 @@ class SoundCloudServiceStreamSelectionTest {
 
 	/** A /tracks/1 answer: a streamable ALLOW track with these transcodings. */
 	private static String track(String... transcodings) {
-		return "{\"id\": 1, \"title\": \"Song\", \"user\": {\"username\": \"artist\"},"
+		return "{\"id\": 1, \"title\": \"Song\", \"user\": {\"username\": \"artist\"}, \"duration\": 200000,"
 				+ " \"permalink_url\": \"https://soundcloud.com/artist/song\", \"streamable\": true,"
 				+ " \"policy\": \"ALLOW\", \"media\": {\"transcodings\": [" + String.join(",", transcodings) + "]}}";
 	}

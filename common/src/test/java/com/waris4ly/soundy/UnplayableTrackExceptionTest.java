@@ -15,7 +15,8 @@ class UnplayableTrackExceptionTest {
 	private static TrackData drmTrack(String title, String author) throws IOException {
 		String json = "{\"id\": 7, \"title\": " + UnplayableTrackException.quote(title) + ", \"user\": {\"username\": "
 				+ UnplayableTrackException.quote(author) + "},"
-				+ " \"permalink_url\": \"https://soundcloud.com/a/b\", \"streamable\": true, \"policy\": \"ALLOW\","
+				+ " \"permalink_url\": \"https://soundcloud.com/a/b\", \"duration\": 122588, \"streamable\": true,"
+				+ " \"policy\": \"ALLOW\","
 				+ " \"media\": {\"transcodings\": [{\"url\": \"u\", \"snipped\": false, \"quality\": \"sq\","
 				+ " \"format\": {\"protocol\": \"ctr-encrypted-hls\", \"mime_type\": \"audio/mp4\"}}]}}";
 		return new TrackParser().parse(JsonBrowser.parse(json));
@@ -36,6 +37,7 @@ class UnplayableTrackExceptionTest {
 		assertEquals(7, payload.get("id").asLong(0));
 		assertEquals(title, payload.get("title").text());
 		assertEquals("a\tb", payload.get("author").text());
+		assertEquals(122588, payload.get("duration").asLong(0));
 		assertEquals("https://soundcloud.com/a/b", payload.get("uri").text());
 	}
 
