@@ -88,6 +88,9 @@ class SoundCloudLoaderIT {
 		assertEquals(StreamSelection.Unplayable.DRM, e.getReason());
 		assertEquals("NewJeans", e.getTrack().getTitle());
 		assertTrue(e.getMessage().contains("soundy={\"code\":\"SOUNDCLOUD_DRM\""), e.getMessage());
+		// A client matches the same recording elsewhere by its length.
+		assertTrue(e.getTrack().getDuration() > 0, e.getMessage());
+		assertTrue(e.getMessage().contains("\"duration\":" + e.getTrack().getDuration() + ","), e.getMessage());
 	}
 
 	@Test

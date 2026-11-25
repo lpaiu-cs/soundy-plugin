@@ -12,8 +12,12 @@ import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
  * the song up elsewhere:
  *
  * <pre>
- * This SoundCloud track can't be played: it is DRM-protected. soundy={"code":"SOUNDCLOUD_DRM","id":1999052727,"title":"NewJeans","author":"NovaX","uri":"https://soundcloud.com/novax21777/newjeans-jersey-club"}
+ * This SoundCloud track can't be played: it is DRM-protected. soundy={"code":"SOUNDCLOUD_DRM","id":1999052727,"title":"NewJeans","author":"NovaX","duration":122588,"uri":"https://soundcloud.com/novax21777/newjeans-jersey-club"}
  * </pre>
+ *
+ * {@code duration} is in milliseconds. With the title and author it lets a
+ * client tell the same recording from another version (remix, live, music-video
+ * edit).
  *
  * The {@code soundy=} marker, the field names and the codes in
  * {@link StreamSelection.Unplayable} are the contract; the sentence before them
@@ -45,7 +49,8 @@ public class UnplayableTrackException extends FriendlyException {
 		}
 		return "This SoundCloud track can't be played: " + reason.getReason() + ". " + MARKER + "{\"code\":"
 				+ quote(reason.getCode()) + ",\"id\":" + track.getId() + ",\"title\":" + quote(track.getTitle())
-				+ ",\"author\":" + quote(track.getUsername()) + ",\"uri\":" + quote(track.getPermalinkUrl()) + "}";
+				+ ",\"author\":" + quote(track.getUsername()) + ",\"duration\":" + track.getDuration() + ",\"uri\":"
+				+ quote(track.getPermalinkUrl()) + "}";
 	}
 
 	// Keeps the object on one line: a stack trace prints the message as one
