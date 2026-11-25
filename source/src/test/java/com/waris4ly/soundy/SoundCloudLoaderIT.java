@@ -82,6 +82,23 @@ class SoundCloudLoaderIT {
 	}
 
 	@Test
+	void drmTrackLinkFailsAtLoadWithItsCode() {
+		UnplayableTrackException e = assertThrows(UnplayableTrackException.class,
+				() -> load(SoundCloudPlaybackEdgeCasesIT.DRM_TRACK_URL));
+		assertEquals(StreamSelection.Unplayable.DRM, e.getReason());
+		assertEquals("NewJeans", e.getTrack().getTitle());
+		assertTrue(e.getMessage().contains("soundy={\"code\":\"SOUNDCLOUD_DRM\""), e.getMessage());
+	}
+
+	@Test
+	void searchLeavesOutDrmTracks() {
+		// The DRM upload ranks in this search; it must not be offered to play.
+		List<String> found = identifiers(load("scsearch[0,50]:newjeans"));
+		assertFalse(found.isEmpty());
+		assertFalse(found.contains("1999052727"), "a DRM track was offered: " + found);
+	}
+
+	@Test
 	void pagedSearchPassesLimitAndOffset() {
 		List<String> first = identifiers(load("scsearch[0,50]:lofi"));
 		assertTrue(first.size() > 10 && first.size() <= 50, "limit 50 gave " + first.size());

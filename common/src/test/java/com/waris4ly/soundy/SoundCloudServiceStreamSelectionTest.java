@@ -1,5 +1,6 @@
 package com.waris4ly.soundy;
 
+import com.sedmelluq.discord.lavaplayer.tools.JsonBrowser;
 import com.sedmelluq.discord.lavaplayer.tools.io.HttpInterface;
 import org.junit.jupiter.api.Test;
 
@@ -23,6 +24,15 @@ class SoundCloudServiceStreamSelectionTest {
 	private static final String SNIPPED_AAC_SQ = transcoding("aac_160k", "hls", AAC, "sq", true);
 	private static final String ABR_SQ = transcoding("abr_sq", "hls", "audio/mpegurl", "sq", false);
 	private static final String MP3 = transcoding("mp3_1_0", "progressive", "audio/mpeg", "sq", false);
+	// What the API lists for a DRM track (1999052727, 2026-11-25): the same
+	// presets,
+	// each only as cbc- and ctr-encrypted-hls.
+	private static final String CBC_AAC_SQ = transcoding("aac_160k", "cbc-encrypted-hls", AAC, "sq", false);
+	private static final String CTR_AAC_SQ = transcoding("aac_160k", "ctr-encrypted-hls", AAC, "sq", false);
+	private static final String CBC_AAC_LQ = transcoding("aac_96k", "cbc-encrypted-hls", AAC, "lq", false);
+	private static final String CTR_AAC_LQ = transcoding("aac_96k", "ctr-encrypted-hls", AAC, "lq", false);
+	private static final String CBC_ABR = transcoding("abr_sq", "cbc-encrypted-hls", "audio/mpegurl", "sq", false);
+	private static final String CTR_ABR = transcoding("abr_sq", "ctr-encrypted-hls", "audio/mpegurl", "sq", false);
 
 	@Test
 	void prefersStandardQualityHlsAac() throws IOException {
@@ -48,12 +58,57 @@ class SoundCloudServiceStreamSelectionTest {
 	@Test
 	void skipsSnippedTranscodings() throws IOException {
 		assertPicked("aac_96k", HLS_FMP4, select(SNIPPED_AAC_SQ, AAC_LQ));
-		assertThrows(IOException.class, () -> select(SNIPPED_AAC_SQ));
+		assertRejected(StreamSelection.Unplayable.PREVIEW, SNIPPED_AAC_SQ);
 	}
 
 	@Test
 	void failsWithoutTranscodings() {
-		assertThrows(IOException.class, () -> select());
+		assertRejected(StreamSelection.Unplayable.NO_STREAM);
+	}
+
+	@Test
+	void rejectsADrmTrackWithItsTitleAndCode() {
+		UnplayableTrackException e = assertRejected(StreamSelection.Unplayable.DRM, CBC_AAC_SQ, CTR_AAC_SQ, CBC_AAC_LQ,
+				CTR_AAC_LQ, CBC_ABR, CTR_ABR);
+
+		assertTrue(
+				e.getMessage()
+						.endsWith("soundy={\"code\":\"SOUNDCLOUD_DRM\",\"id\":1,\"title\":\"Song\","
+								+ "\"author\":\"artist\",\"uri\":\"https://soundcloud.com/artist/song\"}"),
+				e.getMessage());
+	}
+
+	@Test
+	void skipsEncryptedTranscodingsForAPlainOne() throws IOException {
+		assertPicked("aac_96k", HLS_FMP4, select(CBC_AAC_SQ, CTR_AAC_SQ, AAC_LQ));
+		assertPicked("mp3_1_0", PROGRESSIVE, select(CTR_AAC_SQ, MP3));
+	}
+
+	@Test
+	void encryptedOverPreviewIsDrm() {
+		assertRejected(StreamSelection.Unplayable.DRM, SNIPPED_AAC_SQ, CTR_AAC_SQ);
+	}
+
+	/**
+	 * The bug this guards: loading judged a track by its policy and playback by its
+	 * transcodings, so a DRM track loaded and then failed. Both now ask
+	 * StreamSelection; for every track here they must agree.
+	 */
+	@Test
+	void loadingAndPlaybackAgree() throws IOException {
+		String[][] tracks = {{AAC_SQ}, {MP3}, {ABR_SQ}, {SNIPPED_AAC_SQ}, {SNIPPED_AAC_SQ, AAC_LQ}, {CTR_AAC_SQ, MP3},
+				{CBC_AAC_SQ, CTR_AAC_SQ, CBC_AAC_LQ, CTR_AAC_LQ, CBC_ABR, CTR_ABR}, {}};
+		for (String[] transcodings : tracks) {
+			boolean loads = new TrackParser().parse(JsonBrowser.parse(track(transcodings))).isStreamable();
+			boolean plays;
+			try {
+				select(transcodings);
+				plays = true;
+			} catch (UnplayableTrackException e) {
+				plays = false;
+			}
+			assertEquals(loads, plays, "load and play disagree on " + String.join(", ", transcodings));
+		}
 	}
 
 	@Test
@@ -74,12 +129,25 @@ class SoundCloudServiceStreamSelectionTest {
 				MEDIA, preset, protocol, preset, snipped, protocol, mime, quality);
 	}
 
+	/** A /tracks/1 answer: a streamable ALLOW track with these transcodings. */
+	private static String track(String... transcodings) {
+		return "{\"id\": 1, \"title\": \"Song\", \"user\": {\"username\": \"artist\"},"
+				+ " \"permalink_url\": \"https://soundcloud.com/artist/song\", \"streamable\": true,"
+				+ " \"policy\": \"ALLOW\", \"media\": {\"transcodings\": [" + String.join(",", transcodings) + "]}}";
+	}
+
+	private static UnplayableTrackException assertRejected(StreamSelection.Unplayable reason, String... transcodings) {
+		UnplayableTrackException e = assertThrows(UnplayableTrackException.class, () -> select(transcodings));
+		assertEquals(reason, e.getReason());
+		return e;
+	}
+
 	/**
 	 * Runs getStream on a track with these transcodings. Each transcoding URL
 	 * resolves to itself, so the result shows which one was picked.
 	 */
 	private static StreamData select(String... transcodings) throws IOException {
-		String track = "{\"media\": {\"transcodings\": [" + String.join(",", transcodings) + "]}}";
+		String track = track(transcodings);
 		SoundCloudHttpClient client = new SoundCloudHttpClient(new ClientIdProvider()) {
 			@Override
 			public String get(HttpInterface http, String path) {
@@ -103,7 +171,7 @@ class SoundCloudServiceStreamSelectionTest {
 			@Override
 			public String get(HttpInterface http, String path) {
 				requests.add(path);
-				return "{\"media\": {\"transcodings\": [" + transcoding + "]}}";
+				return track(transcoding);
 			}
 
 			@Override

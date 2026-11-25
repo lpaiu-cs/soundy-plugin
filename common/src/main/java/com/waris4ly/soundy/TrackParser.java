@@ -11,15 +11,10 @@ public class TrackParser {
 		long duration = track.get("duration").asLong(0);
 		String artworkUrl = track.get("artwork_url").text();
 		String username = track.get("user").get("username").text();
-		boolean streamable = track.get("streamable").asBoolean(false);
-
-		// SNIP is a 30-second preview; BLOCK is region-blocked, with no
-		// transcodings at all.
-		String policy = track.get("policy").text();
-		boolean playable = !"SNIP".equalsIgnoreCase(policy) && !"BLOCK".equalsIgnoreCase(policy);
 
 		return new TrackData(id, title != null ? title : "Unknown Title", permalinkUrl != null ? permalinkUrl : "",
-				duration, upgradeArtwork(artworkUrl), username != null ? username : "Unknown", streamable && playable);
+				duration, upgradeArtwork(artworkUrl), username != null ? username : "Unknown",
+				StreamSelection.of(track));
 	}
 
 	private static String upgradeArtwork(String artworkUrl) {

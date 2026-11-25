@@ -64,7 +64,24 @@ Lavalink's built-in SoundCloud source uses the same source name, `soundcloud`, a
 - `scsearch:<query>` returns up to 10 tracks.
 - `scsearch[<offset>,<limit>]:<query>` skips `<offset>` results and returns up to `<limit>`, which can be at most 200.
 
-Preview-only tracks (30-second SNIP clips) and tracks that SoundCloud marks as not streamable are skipped.
+### Tracks that can't be played
+A track plays only if SoundCloud offers it as a full-length (not preview) stream in plain HLS AAC (`audio/mp4`) or progressive MP3. Loading and playback check this with the same rule, so a track that loads also plays.
+
+Searches, playlists and likes skip the tracks that fail it. A direct link to one fails to load, and a track that stops passing after it was loaded (for example, played from an encoded track) fails when played. Both errors end with a one-line JSON object after `soundy=`:
+
+```
+This SoundCloud track can't be played: it is DRM-protected. soundy={"code":"SOUNDCLOUD_DRM","id":1999052727,"title":"NewJeans","author":"NovaX","uri":"https://soundcloud.com/novax21777/newjeans-jersey-club"}
+```
+
+In Lavalink's `/v4/loadtracks` this is the last `Caused by:` line of `data.causeStackTrace`, and in a `TrackExceptionEvent` it is `exception.message`. The marker, the field names and the codes are stable; the sentence before them may change.
+
+| `code` | Why |
+|---|---|
+| `SOUNDCLOUD_DRM` | Every full-length stream is encrypted (`cbc-encrypted-hls`, `ctr-encrypted-hls`). |
+| `SOUNDCLOUD_PREVIEW` | Only a 30-second preview (policy `SNIP`, or only snipped streams). |
+| `SOUNDCLOUD_BLOCKED` | Blocked in this region (policy `BLOCK`). |
+| `SOUNDCLOUD_NOT_STREAMABLE` | SoundCloud marks it as not streamable. |
+| `SOUNDCLOUD_NO_STREAM` | No stream in a supported format. |
 
 ## Library use
 `source` provides `SoundySourceManager` for Lavaplayer. `common` holds the HTTP client, `client_id` lookup and parsers it uses.

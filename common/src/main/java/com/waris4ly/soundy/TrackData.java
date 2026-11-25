@@ -8,17 +8,17 @@ public class TrackData {
 	private final long duration;
 	private final String artworkUrl;
 	private final String username;
-	private final boolean streamable;
+	private final StreamSelection streamSelection;
 
 	public TrackData(long id, String title, String permalinkUrl, long duration, String artworkUrl, String username,
-			boolean streamable) {
+			StreamSelection streamSelection) {
 		this.id = id;
 		this.title = title;
 		this.permalinkUrl = permalinkUrl;
 		this.duration = duration;
 		this.artworkUrl = artworkUrl;
 		this.username = username;
-		this.streamable = streamable;
+		this.streamSelection = streamSelection;
 	}
 
 	public long getId() {
@@ -45,7 +45,12 @@ public class TrackData {
 		return username;
 	}
 
+	/** Whether the track plays here, and from which stream. */
+	public StreamSelection getStreamSelection() {
+		return streamSelection;
+	}
+
 	public boolean isStreamable() {
-		return streamable;
+		return streamSelection.isPlayable();
 	}
 }

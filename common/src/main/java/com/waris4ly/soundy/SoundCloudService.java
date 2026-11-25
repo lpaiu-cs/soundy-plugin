@@ -76,55 +76,23 @@ public class SoundCloudService {
 		return getStream(http, trackId, null);
 	}
 
+	/**
+	 * Resolves the stream to play. Picks it with the same {@link StreamSelection}
+	 * loading used, and throws {@link UnplayableTrackException} for a track it
+	 * rejects: one that loaded before SoundCloud changed it, or one decoded from an
+	 * old encoding.
+	 */
 	public StreamData getStream(HttpInterface http, long trackId, String secretToken) throws IOException {
 		// A private track answers 404 without its secret token.
 		String json = client.get(http, withSecretToken("/tracks/" + trackId, secretToken));
-		JsonBrowser track = JsonBrowser.parse(json);
-		JsonBrowser transcodings = track.get("media").get("transcodings");
-
-		if (transcodings.isNull() || transcodings.values().isEmpty()) {
-			throw new IOException("No transcodings found for track: " + trackId);
+		TrackData track = trackParser.parse(JsonBrowser.parse(json));
+		StreamSelection selection = track.getStreamSelection();
+		if (!selection.isPlayable()) {
+			throw new UnplayableTrackException(track);
 		}
 
-		String progressiveUrl = null;
-		String hlsFmp4SqUrl = null;
-		String hlsFmp4LqUrl = null;
-
-		for (JsonBrowser t : transcodings.values()) {
-			if (t.get("snipped").asBoolean(false))
-				continue;
-
-			String protocol = t.get("format").get("protocol").text();
-			String mime = t.get("format").get("mime_type").text();
-			String quality = t.get("quality").text();
-			String url = withSecretToken(t.get("url").text(), secretToken);
-
-			// No break: HLS AAC is preferred wherever it is listed.
-			if ("progressive".equals(protocol) && mime != null && mime.contains("mpeg") && progressiveUrl == null) {
-				progressiveUrl = url;
-			}
-
-			if ("hls".equals(protocol) && mime != null && mime.startsWith("audio/mp4")) {
-				if ("sq".equals(quality) && hlsFmp4SqUrl == null) {
-					hlsFmp4SqUrl = url;
-				} else if (hlsFmp4LqUrl == null) {
-					hlsFmp4LqUrl = url;
-				}
-			}
-		}
-
-		if (hlsFmp4SqUrl != null) {
-			return new StreamData(resolveStreamUrl(http, hlsFmp4SqUrl), StreamData.Protocol.HLS_FMP4, "audio/mp4");
-		}
-		if (hlsFmp4LqUrl != null) {
-			return new StreamData(resolveStreamUrl(http, hlsFmp4LqUrl), StreamData.Protocol.HLS_FMP4, "audio/mp4");
-		}
-		if (progressiveUrl != null) {
-			return new StreamData(resolveStreamUrl(http, progressiveUrl), StreamData.Protocol.PROGRESSIVE,
-					"audio/mpeg");
-		}
-
-		throw new IOException("No playable stream found for track: " + trackId);
+		String url = withSecretToken(selection.getTranscodingUrl(), secretToken);
+		return new StreamData(resolveStreamUrl(http, url), selection.getProtocol(), selection.getMimeType());
 	}
 
 	private String resolveStreamUrl(HttpInterface http, String transcodingUrl) throws IOException {
